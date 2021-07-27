@@ -21,6 +21,8 @@ export type EventHandlerMap<Events extends Record<EventType, unknown>> = Map<
 export interface Emitter<Events extends Record<EventType, unknown>> {
 	all: EventHandlerMap<Events>;
 
+	queue: EventHandlerMap<Events>,
+
 	on<Key extends keyof Events>(type: Key, handler: Handler<Events[Key]>): void;
 	on(type: '*', handler: WildcardHandler<Events>): void;
 
@@ -32,24 +34,38 @@ export interface Emitter<Events extends Record<EventType, unknown>> {
 }
 
 /**
+ * 
+ * 全局存储数据
+ */
+const STORE = new Map();
+
+const queue = new Map();
+
+/**
  * Mitt: Tiny (~200b) functional event emitter / pubsub.
  * @name mitt
  * @returns {Mitt}
  */
-export default function mitt<Events extends Record<EventType, unknown>>(
+ export default function mitt<Events extends Record<EventType, unknown>>(
 	all?: EventHandlerMap<Events>
 ): Emitter<Events> {
 	type GenericEventHandler =
 		| Handler<Events[keyof Events]>
 		| WildcardHandler<Events>;
-	all = all || new Map();
+	all = all || STORE;
 
 	return {
-
 		/**
 		 * A Map of event names to registered handler functions.
 		 */
 		all,
+
+		/**
+		 * 
+		 * A Map of evt params from  event type 
+		 */
+
+		queue,
 
 		/**
 		 * Register an event handler for the given type.
@@ -59,11 +75,20 @@ export default function mitt<Events extends Record<EventType, unknown>>(
 		 */
 		on<Key extends keyof Events>(type: Key, handler: GenericEventHandler) {
 			const handlers: Array<GenericEventHandler> | undefined = all!.get(type);
+			const queueEvts: Array<Events[keyof Events] | undefined> | undefined = queue!.get(type);
 			if (handlers) {
 				handlers.push(handler);
 			}
 			else {
 				all!.set(type, [handler] as EventHandlerList<Events[keyof Events]>);
+			}
+
+			if (queueEvts) {
+				queueEvts
+					.slice()
+					.map((evt) => {
+						(handler as any)(evt!);
+					});
 			}
 		},
 
@@ -98,7 +123,9 @@ export default function mitt<Events extends Record<EventType, unknown>>(
 		 */
 		emit<Key extends keyof Events>(type: Key, evt?: Events[Key]) {
 			let handlers = all!.get(type);
+			let hasHandle = false;
 			if (handlers) {
+				hasHandle = true;
 				(handlers as EventHandlerList<Events[keyof Events]>)
 					.slice()
 					.map((handler) => {
@@ -108,11 +135,22 @@ export default function mitt<Events extends Record<EventType, unknown>>(
 
 			handlers = all!.get('*');
 			if (handlers) {
+				hasHandle = true;
 				(handlers as WildCardEventHandlerList<Events>)
 					.slice()
 					.map((handler) => {
 						handler(type, evt!);
 					});
+			}
+
+			if (!hasHandle) {
+				const queueEvts: Array<Events[keyof Events] | undefined> | undefined = queue!.get(type);
+				if (queueEvts) {
+					queueEvts.push(evt);
+				}
+				else {
+					queue!.set(type, [evt] as EventHandlerList<Events[keyof Events]>);
+				}
 			}
 		}
 	};
