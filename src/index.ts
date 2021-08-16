@@ -124,7 +124,7 @@ const queue = new Map();
 		emit<Key extends keyof Events>(type: Key, evt?: Events[Key]) {
 			let handlers = all!.get(type);
 			let hasHandle = false;
-			if (handlers) {
+			if (handlers && handlers.length > 0) {
 				hasHandle = true;
 				(handlers as EventHandlerList<Events[keyof Events]>)
 					.slice()
@@ -134,7 +134,7 @@ const queue = new Map();
 			}
 
 			handlers = all!.get('*');
-			if (handlers) {
+			if (handlers && handlers.length > 0) {
 				hasHandle = true;
 				(handlers as WildCardEventHandlerList<Events>)
 					.slice()
